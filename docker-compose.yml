@@ -15,4 +15,3 @@ services:
      - POSTGRES_DB=dev
      - POSTGRES_USER=admin
      - POSTGRES_PASSWORD=secret
-     1
