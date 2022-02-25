@@ -8,76 +8,77 @@
 #  - name: update all apt packages
 #    apt: upgrade=dist
 
-  - name: Install dependencies
-    apt:
-      name: "{{ packages }}"
-      state: present
-      update_cache: yes
-    vars:
-      packages:
-      - apt-transport-https
-      - ca-certificates
-      - curl
-      - software-properties-common
-      - gnupg-agent
+  - name: Install yum utils
+    yum:
+      name: yum-utils
+      state: latest
 
-  - name: Add an apt signing key for docker
-    apt_key:
-      url: https://download.docker.com/linux/ubuntu/gpg
-      state: present
- 
-  - name: add apt repository for stable version
-    apt_repository:
-      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
-      state: present
+  - name: Install device-mapper-persistent-data
+    yum:
+      name: device-mapper-persistent-data
+      state: latest
 
-  - name: install docker
-    apt:
-      name: "{{ packages }}"
-      state: present
-      update_cache: yes
-    vars:
-      packages:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
+  - name: Install lvm2
+    yum:
+      name: lvm2
+      state: latest
 
-  - name: add user to docker group
-    user:
-      name: "{{ansible_user}}"
-      group: docker
-
-  - name: download docker-compose
+  - name: Add Docker repo
     get_url:
-      url: https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-x86_64
+      url: https://download.docker.com/linux/centos/docker-ce.repo
+      dest: /etc/yum.repos.d/docker-ce.repo   
+
+
+  - name: delete_runc
+    package:
+      name: ['runc*']
+      state: absent
+      use: dnf
+    become: yes
+    when: "'web' in inventory_hostname"
+
+  - name: Install Docker
+    package:
+      name: docker-ce
+      state: latest
+
+  - name: Start Docker service
+    service:
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: download_app
+    shell: curl -O https://storage.googleapis.com/wscc-cloud-public/responding-app.tar
+    when: "'web' in inventory_hostname"
+  - name: app_load
+    shell: docker load < ./responding-app.tar
+    when: "'web' in inventory_hostname"
+  - name: download_docker-compose
+    get_url:
+      url : https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-x86_64
       dest: ~/docker-compose
       mode: '+x'
-
   - name: check docker-compose exists
     stat: path=~/docker-compose
     register: docker_compose
-
-  - name: move docker_compose to
+  - name: move docker-compose to /usr/local/bin/docker-compose
     command: mv ~/docker-compose /usr/local/bin/docker-compose
     when: docker_compose.stat.exists
-  
-  - name: copy_file_docker_compose_to_db
+  - name: move_database
     copy:
-       src: ./docker-compose.yml
-       dest: /root/docker-compose.yml
-    when: inventory_hostname == "db" 
-  
-  - name: docker_compose_up_db
-    shell: docker-compose up -d --build 
+      src: ./docker-compose.yml
+      dest: /root/docker-compose.yml
     when: inventory_hostname == "db"
-  
-  - name: appload_app_in_docker_web1
-    shell: docker load < /opt/responding-app.tar
-    when: "'web' in inventory_hostname"
+  - name: database_run
+    shell: docker-compose up -d --build
+    when: inventory_hostname == "db"
 
   - name: start_docker_web1
     shell: sudo docker run -d --publish 5000:5000 --restart always responding-app --ad_ip_addr 200.100.100.1 --db_conn_string postgresql://admin:secret@200.100.100.50:5432/dev --external_link http://yandex.ru
     when: "'web' in inventory_hostname"
+
+
 #
 #  - name: appload_app_in_docker_web2
 #    shell: docker load < /opt/responding-app.tar
@@ -86,6 +87,12 @@
 #  - name: start_docker_web2
 #    shell: sudo docker run -d --publish 5000:5000 --restart always responding-app --ad_ip_addr 200.100.100.1 --db_conn_string postgresql://admin:secret@200.100.100.200:5432/dev --external_link http://yandex.ru
 #    when: inventory_hostname == "web2"
+  - name: install_pyopenssl
+    yum:
+      name: python3-pyOpenSSL
+      state: latest
+    become: yes
+    when: "'web' in inventory_hostname"
 
   - name: directory
     file:
@@ -114,28 +121,41 @@
     when: "'web' in inventory_hostname"
   
   - name: ensure_nginx_is_at_the_latest_version
-    apt: name=nginx state=latest
+    yum:
+      name: nginx
+      state: latest
     when: "'web' in inventory_hostname"
    
 
   - name: start_nginx
     service:
-        name: nginx
-        state: started
+      name: nginx
+      state: started
     when: "'web' in inventory_hostname"
 
   
   - name: copy_file_task.conf_to_web1
     copy:
-       src: ./task.conf
-       dest: /etc/nginx/conf.d/task.conf
+      src: ./task.conf
+      dest: /etc/nginx/conf.d/task.conf
     when: "'web' in inventory_hostname"
     
     
   - name: reboot_nginx_web1
     service:
-        name: nginx
-        state: restarted
+      name: nginx
+      state: restarted
     when: "'web' in inventory_hostname"
 
-  
+  - name: copy_chrony
+    copy:
+      src: ./chrony.conf
+      dest: /etc/chrony.conf
+    
+  - name: restart_chrony
+    service:
+       name: chronyd
+       state: restarted
+       enabled: yes
+  - name: timedatectl
+    shell: timedatectl set-timezone Europe/Moscow

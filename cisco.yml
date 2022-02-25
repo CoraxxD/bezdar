@@ -64,7 +64,7 @@
      lines:
        - ip address 100.100.100.2 255.255.255.252
        - tunnel source gi1
-       - tunnel destination left.pod.unakbars.ru
+       - tunnel destination L-RTR.unakbars.ru
        - tunnel mode gre ip
        - no sh
     when: inventory_hostname == "right.pod"
@@ -74,7 +74,7 @@
      lines:
        - ip address 100.100.100.1 255.255.255.252
        - tunnel source gi1
-       - tunnel destination right.pod.unakbars.ru
+       - tunnel destination R-RTR.unakbars.ru
        - tunnel mode gre ip
        - no sh
     when: inventory_hostname == "left.pod"
