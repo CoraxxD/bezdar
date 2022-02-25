@@ -6,7 +6,15 @@
 #   apt: update_cache=yes cache_valid_time=3600
 
 #  - name: update all apt packages
-#    apt: upgrade=dist
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+
+  - name: Stop and disable firewalld.
+    service:
+      name: firewalld
+      state: stopped
+      enabled: False
 
   - name: Install yum utils
     yum:
@@ -75,7 +83,7 @@
     when: inventory_hostname == "db"
 
   - name: start_docker_web1
-    shell: sudo docker run -d --publish 5000:5000 --restart always responding-app --ad_ip_addr 200.100.100.1 --db_conn_string postgresql://admin:secret@200.100.100.50:5432/dev --external_link http://yandex.ru
+    shell: sudo docker run -d --publish 5000:5000 --restart always responding-app --ad_ip_addr 200.100.100.123 --db_conn_string postgresql://admin:secret@200.100.100.50:5432/dev --external_link http://yandex.ru
     when: "'web' in inventory_hostname"
 
 
